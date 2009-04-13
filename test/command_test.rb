@@ -43,4 +43,11 @@ class CommandTest < Test::Unit::TestCase
     assert_equal 2, cmd.seq
     assert_equal 'ijklmnop', cmd.data
   end
+
+  def test_register_control_connection_command
+    cmd = RegisterControlConnectionCommand.new(12345)
+    cmd = Command.parse(cmd.to_s)
+    assert_equal RegisterControlConnectionCommand, cmd.class
+    assert_equal 12345, cmd.control_connection_id
+  end
 end

@@ -28,6 +28,13 @@ class Command
   end
 end
 
+# TODO:
+#class CreateConnectionCommand < Command
+#  attrs :connection_id => :long,
+#        :address => :string,
+#        :port, :integer
+#end
+
 class CreateConnectionCommand < Command
   attr_reader :connection_id, :address, :port
 

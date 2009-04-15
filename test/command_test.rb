@@ -3,11 +3,19 @@ require File.dirname(__FILE__) + '/../lib/command'
 
 class CommandTest < Test::Unit::TestCase
   def test_create_connection_command
-    cmd = CreateConnectionCommand.new('google.com', 80)
+    cmd = CreateConnectionCommand.new(5, 'google.com', 80)
     cmd = Command.parse(cmd.to_s)
     assert_equal CreateConnectionCommand, cmd.class
+    assert_equal 5, cmd.connection_id
     assert_equal 'google.com', cmd.address
     assert_equal 80, cmd.port
+  end
+
+  def test_close_connection_command
+    cmd = CloseConnectionCommand.new(99)
+    cmd = Command.parse(cmd.to_s)
+    assert_equal CloseConnectionCommand, cmd.class
+    assert_equal 99, cmd.connection_id
   end
 
   def test_send_data_command
@@ -42,6 +50,28 @@ class CommandTest < Test::Unit::TestCase
     assert_equal 1, cmd.connection_id
     assert_equal 2, cmd.seq
     assert_equal 'ijklmnop', cmd.data
+  end
+
+  def test_parse_partial_commands
+    cmds = [
+      SendDataCommand.new(1, 2, 'abcdefghijklmnop'),
+      RegisterControlConnectionCommand.new(699124),
+      CreateConnectionCommand.new(11111, 'google.com', 12445),
+      CloseConnectionCommand.new(11111)
+    ]
+    buffer = cmds.map {|c| c.to_s }*''
+    buf = ''
+    parsed_cmds = []
+    buffer.each_byte do |b|
+      buf << b
+      if cmd = Command.parse(buf)
+        parsed_cmds << cmd
+      end
+    end
+
+    expected_classes = [SendDataCommand, RegisterControlConnectionCommand, CreateConnectionCommand, CloseConnectionCommand]
+    assert_equal expected_classes, parsed_cmds.map{|c|c.class}
+    assert buf.empty?
   end
 
   def test_register_control_connection_command

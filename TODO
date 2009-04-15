@@ -1,5 +1,6 @@
 - client connects, registers control connection with uuid
   - connection id starts at 1 and is incremented globally inside a client process, this way we keep connection ids small w/o clashes
+- come up with command definition api to dry up code
 
 
 - file bug against pack("w"), should return nil ??

@@ -29,22 +29,41 @@ class Command
 end
 
 class CreateConnectionCommand < Command
-  attr_reader :address, :port
+  attr_reader :connection_id, :address, :port
 
-  def initialize(address, port)
-    @address, @port = address, port.to_i
+  def initialize(connection_id, address, port)
+    @connection_id, @address, @port = connection_id, address, port.to_i
   end
 
   def to_s
-    super + [@address, @port].pack("Z*I")
+    super + [@connection_id, @address, @port].pack("LZ*I")
   end
 
   def self.parse(s)
-    address, port, rest = s.unpack("Z*Ia*")
-    return nil  if ! address or ! port
+    connection_id, address, port, rest = s.unpack("LZ*Ia*")
+    return nil  if ! connection_id or ! address or ! port
 
     s.replace(rest)
-    CreateConnectionCommand.new(address, port)
+    CreateConnectionCommand.new(connection_id, address, port)
+  end
+end
+
+class CloseConnectionCommand < Command
+  attr_reader :connection_id
+  def initialize(connection_id)
+    @connection_id = connection_id
+  end
+
+  def to_s
+    super + [@connection_id].pack('L')
+  end
+
+  def self.parse(s)
+    connection_id, rest = s.unpack('La*')
+    return nil  if ! connection_id
+
+    s.replace(rest)
+    CloseConnectionCommand.new(connection_id)
   end
 end
 
@@ -55,11 +74,11 @@ class SendDataCommand < Command
   end
 
   def to_s
-    super + [@connection_id, @seq, @data.size].pack('SLS') + @data
+    super + [@connection_id, @seq, @data.size].pack('LLS') + @data
   end
 
   def self.parse(s)
-    connection_id, seq, data_size, rest = s.unpack('SLSa*')
+    connection_id, seq, data_size, rest = s.unpack('LLSa*')
     return nil  if ! connection_id or ! seq or ! data_size or rest.size < data_size
 
     s.replace(rest[data_size..-1])

@@ -12,123 +12,93 @@ module PersistentTunnel
         subclass.code = code
       end
 
+      def attrs(*attrs)
+        @attrs ||= begin
+          attrs = [*attrs].flatten.map {|p| p.to_a.flatten }  # convert hashes to arrays
+          define_methods(attrs)
+
+          attrs
+        end
+      end
+
+      def define_methods(attrs)
+        names = attrs.map {|k,v| k }
+        class_eval %{
+          attr_reader :#{names * ", :"}
+
+          def initialize(#{names * ","})
+            @#{names * ", @"} = #{names * ","}
+          end
+        }
+      end
+
       def parse(s)
         code, rest = s.unpack('Ca*')
 
         klass = COMMAND_CODES[code]
         raise "Unknown command code: #{code}"  if ! klass
 
-        cmd = klass.parse(rest)
-        s.replace(rest)  if cmd
-        cmd
+        vals = []
+        klass.attrs.each do |_, type|
+          case type
+          when :long
+            val, rest = rest.unpack('La*')
+          when :short
+            val, rest = rest.unpack('Sa*')
+          when :string
+            size, rest = rest.unpack('Sa*')
+            val = rest.slice!(0, size)  if size and rest.size >= size
+          end
+
+          return nil  if ! val
+
+          vals << val
+        end
+        s.replace(rest)
+
+        klass.new(*vals)
       end
     end
 
     def to_s
-      [self.class.code].pack('C')
-    end
-  end
+      data = [self.class.code].pack('C')
 
-  # TODO:
-  #class CreateConnectionCommand < Command
-  #  attrs :connection_id => :long,
-  #        :address => :string,
-  #        :port, :integer
-  #end
+      self.class.attrs.each do |name, type|
+        val = instance_variable_get("@#{name}")
+        case type
+        when :long
+          data << [val].pack('L')
+        when :short
+          data << [val].pack('S')
+        when :string
+          data << [val.size].pack('S') << val
+        end
+      end
 
-  class CreateConnectionCommand < Command
-    attr_reader :connection_id
-
-    def initialize(connection_id)
-      @connection_id = connection_id
-    end
-
-    def to_s
-      super + [@connection_id].pack('L')
+      data
     end
 
-    def self.parse(s)
-      connection_id, rest = s.unpack('La*')
-      return nil  if ! connection_id
-
-      s.replace(rest)
-      CreateConnectionCommand.new(connection_id)
+    class CreateConnection < Command
+      attrs :connection_id => :long
     end
-  end
-
-  class CloseConnectionCommand < Command
-    attr_reader :connection_id
-    def initialize(connection_id)
-      @connection_id = connection_id
+    
+    class CloseConnection < Command
+      attrs :connection_id => :long
     end
-
-    def to_s
-      super + [@connection_id].pack('L')
+    
+    class SendData < Command
+      attrs [:connection_id => :long],
+            [:seq => :long],
+            [:data => :string]
     end
 
-    def self.parse(s)
-      connection_id, rest = s.unpack('La*')
-      return nil  if ! connection_id
-
-      s.replace(rest)
-      CloseConnectionCommand.new(connection_id)
-    end
-  end
-
-  class SendDataCommand < Command
-    attr_reader :connection_id, :seq, :data
-    def initialize(connection_id, seq, data)
-      @connection_id, @seq, @data = connection_id.to_i, seq.to_i, data
+    class SendDataAck < Command
+      attrs [:connection_id => :long],
+            [:seq => :long]
     end
 
-    def to_s
-      super + [@connection_id, @seq, @data.size].pack('LLS') + @data
-    end
-
-    def self.parse(s)
-      connection_id, seq, data_size, rest = s.unpack('LLSa*')
-      return nil  if ! connection_id or ! seq or ! data_size or rest.size < data_size
-
-      s.replace(rest[data_size..-1])
-      SendDataCommand.new(connection_id, seq, rest[0, data_size])
-    end
-  end
-
-  class SendDataAckCommand < Command
-    attr_reader :connection_id, :seq
-    def initialize(connection_id, seq)
-      @connection_id, @seq = connection_id, seq
-    end
-
-    def to_s
-      super + [@connection_id, @seq].pack('LL')
-    end
-
-    def self.parse(s)
-      connection_id, seq, rest = s.unpack('LLa*')
-      return nil  if ! connection_id or ! seq
-
-      s.replace(rest)
-      SendDataAckCommand.new(connection_id, seq)
-    end
-  end
-
-  class RegisterControlConnectionCommand < Command
-    attr_reader :control_connection_id
-    def initialize(control_connection_id)
-      @control_connection_id = control_connection_id
-    end
-
-    def to_s
-      super + [@control_connection_id].pack('S')
-    end
-
-    def self.parse(s)
-      control_connection_id, rest = s.unpack('Sa*')
-      return nil  if ! control_connection_id
-
-      s.replace(rest)
-      RegisterControlConnectionCommand.new(control_connection_id)
+    class RegisterControlConnection < Command
+      attrs :control_connection_id => :short
     end
   end
 end
